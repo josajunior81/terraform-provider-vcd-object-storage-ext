@@ -6,7 +6,9 @@
 before:
   hooks:
     # this is just an example and not a requirement for provider building/publishing
-    -	go get -u ./... && go mod tidy && go mod vendor
+    -	go get -u ./...
+    - go mod tidy
+    - go mod vendor
 builds:
 - env:
     # goreleaser does not work with CGO, it could also complicate
