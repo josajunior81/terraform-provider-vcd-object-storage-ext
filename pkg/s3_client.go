@@ -3,6 +3,7 @@ package pkg
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -14,14 +15,6 @@ import (
 )
 
 const PATH = "api/v1/s3"
-
-type S3Client struct {
-	client      *http.Client
-	s3Url       string
-	region      string
-	bearerToken string
-	path        string
-}
 
 func NewS3Client(s3url, region, apiToken, org, vcdUrl string) S3Client {
 
@@ -131,7 +124,7 @@ func (s S3Client) doUpload(reqUrl, source string) error {
 }
 
 func (s S3Client) GetBucket(name string) (string, error) {
-	bucketUrl := s.mountUrl(name, "")
+	bucketUrl := s.mountUrl(name, "max-keys=1")
 
 	resp, err := s.doRequest(http.MethodGet, bucketUrl, "")
 
@@ -166,7 +159,6 @@ func (s S3Client) BucketTags(bucket string, tags []any) error {
 	_, err := s.doRequest(http.MethodPut, tagsUrl, tagSet)
 
 	return err
-
 }
 
 func (s S3Client) removeBucketTags(bucket string) error {
@@ -179,4 +171,98 @@ func (s S3Client) removeBucketTags(bucket string) error {
 func (s S3Client) UploadObject(bucket, key, source string, overwrite bool) error {
 	objectUrl := s.mountUrl(bucket+"/"+key, fmt.Sprintf("overwrite=%t", overwrite))
 	return s.doUpload(objectUrl, source)
+}
+
+func (s S3Client) BucketAcls(bucket string, setDefault bool, aclsI []interface{}) error {
+	aclsUrl := s.mountUrl(bucket, "acl")
+
+	bucketStr, err := s.GetBucket(bucket)
+	if err != nil {
+		log.Panicf("ERROR getting bucker %v", err)
+		return err
+	}
+
+	var bucketObj *Bucket
+	if err := json.Unmarshal([]byte(bucketStr), &bucketObj); err != nil {
+		log.Println(bucketStr)
+		log.Panicf("ERROR unmarshalling bucket %v", err)
+		return err
+	}
+
+	log.Printf("BUCKET => %v", bucketObj)
+
+	if setDefault {
+		return s.defaultAcl(bucket, bucketObj)
+	}
+
+	var grants []map[string]interface{}
+
+	log.Printf("ACL %v", aclsI...)
+	for _, a := range aclsI {
+		acl := a.(map[string]interface{})
+
+		log.Printf("ACL USER: %s", acl["user"])
+
+		grantee := map[string]interface{}{}
+		grant := map[string]interface{}{}
+		switch acl["user"] {
+		case "tenant":
+			grantee["id"] = bucketObj.Tenant + "|"
+		case "authenticated":
+			grantee["uri"] = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+		case "public":
+			grantee["uri"] = "http://acs.amazonaws.com/groups/global/AllUsers"
+		case "system-logger":
+			grantee["uri"] = "http://acs.amazonaws.com/groups/s3/LogDelivery"
+		}
+		grant["grantee"] = grantee
+		grant["permission"] = acl["permission"]
+
+		grants = append(grants, grant)
+	}
+
+	grants = append(grants, map[string]interface{}{"grantee": map[string]interface{}{"id": bucketObj.Owner.Id}, "permission": "FULL_CONTROL"})
+
+	log.Printf("GRANTS %v", grants)
+
+	payload := map[string]interface{}{}
+	payload["owner"] = bucketObj.Owner
+	payload["grants"] = grants
+
+	log.Printf("GRANTS %v", payload)
+
+	payloadStr, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	log.Println(string(payloadStr))
+
+	// s.removeBucketAcls(bucket)
+	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr))
+
+	return err1
+}
+
+func (s S3Client) defaultAcl(bucketName string, bucket *Bucket) error {
+	aclsUrl := s.mountUrl(bucketName, "acl")
+
+	var grants []map[string]interface{}
+
+	grants = append(grants, map[string]interface{}{"grantee": map[string]interface{}{"id": bucket.Owner.Id}, "permission": "FULL_CONTROL"})
+
+	payload := map[string]interface{}{}
+	payload["owner"] = bucket.Owner
+	payload["grants"] = grants
+
+	payloadStr, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	log.Println(string(payloadStr))
+
+	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr))
+
+	return err1
 }

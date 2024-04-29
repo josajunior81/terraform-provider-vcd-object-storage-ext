@@ -43,6 +43,24 @@ func resourceBucket() *schema.Resource {
 					},
 				},
 			},
+
+			"acl": {
+				Type:     schema.TypeList,
+				Optional: true,
+				ForceNew: false,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"user": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"permission": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -54,9 +72,17 @@ func resourceBucketCreate(d *schema.ResourceData, meta interface{}) error {
 	d.SetId(uuid.NewString())
 	bucketName := d.Get("name").(string)
 	tags := d.Get("tag").([]any)
+	acls := d.Get("acl").([]interface{})
 
 	s3client.CreateBucket(bucketName)
-	s3client.BucketTags(bucketName, tags)
+	if len(acls) > 0 {
+		s3client.BucketAcls(bucketName, false, acls)
+	} else {
+		s3client.BucketAcls(bucketName, true, nil)
+	}
+	if len(tags) > 0 {
+		s3client.BucketTags(bucketName, tags)
+	}
 
 	return resourceBucketRead(d, meta)
 }
@@ -74,8 +100,17 @@ func resourceBucketUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	bucketName := d.Get("name").(string)
 	tags := d.Get("tag").([]any)
+	acls := d.Get("acl").([]interface{})
 
-	s3client.BucketTags(bucketName, tags)
+	s3client.CreateBucket(bucketName)
+	if len(acls) > 0 {
+		s3client.BucketAcls(bucketName, false, acls)
+	} else {
+		s3client.BucketAcls(bucketName, true, nil)
+	}
+	if len(tags) > 0 {
+		s3client.BucketTags(bucketName, tags)
+	}
 	return nil
 }
 
