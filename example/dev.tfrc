@@ -1,0 +1,6 @@
+provider_installation {
+  dev_overrides {
+    "josajunior81/vcd-object-storage-ext" = "../build" // the directory where the binary was built.
+  }
+  direct {}
+}
