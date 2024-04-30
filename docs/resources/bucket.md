@@ -17,16 +17,27 @@ description: |-
 
 ### Required
 
-- `name` (String)
+- `name` (String) The bucket name. It must be URL encoded.
 
 ### Optional
 
-- `tag` (Block List) (see [below for nested schema](#nestedblock--tag))
+- `acl` (Block List) Access control lists (ACLs) enable you to manage access to buckets and objects (see [below for nested schema](#nestedblock--acl))
+- `canned_acl` (String) The ACL of the bucket using the specified canned ACL. Valid Values: private | public-read | public-read-write | authenticated-read.
+- `tag` (Block List) The bucket tags. (see [below for nested schema](#nestedblock--tag))
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
 - `last_updated` (String)
+
+<a id="nestedblock--acl"></a>
+### Nested Schema for `acl`
+
+Required:
+
+- `permission` (String) ACL permission. Valid Values: FULL_CONTROL | READ | WRITE | READ_ACP | WRITE_ACP
+- `user` (String) ACL users. Valid Values: TENANT | AUTHENTICATED | PUBLIC | SYSTEM-LOGGER
+
 
 <a id="nestedblock--tag"></a>
 ### Nested Schema for `tag`

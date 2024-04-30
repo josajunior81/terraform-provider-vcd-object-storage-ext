@@ -17,11 +17,14 @@ provider "vcd-object-storage-ext" {
 
 locals {
   tags = [{name="tag1", value="abc"}]
-  acls = [{user="tenant", permission="FULL_CONTROL"}, {user="authenticated", permission="READ"}]
+  acls = [{user="TENANT", permission="FULL_CONTROL"}, {user="AUTHENTICATED", permission="READ"}]
 }
 
 resource "vcd-object-storage-ext_bucket" "this" {
   name = "provider-teste-2"
+
+  canned_acl = "private"
+
   dynamic "tag" {
     for_each = local.tags
     content {
@@ -30,13 +33,14 @@ resource "vcd-object-storage-ext_bucket" "this" {
     }
   }
 
-  # dynamic "acl" {
-  #   for_each = local.acls
-  #   content {
-  #     user = acl.value.user
-  #     permission = acl.value.permission
-  #   }
-  # }
+  dynamic "acl" {
+    for_each = local.acls
+    content {
+      user = acl.value.user
+      permission = acl.value.permission
+    }
+  }
+  
 }
 
 resource "vcd-object-storage-ext_object" "this" {

@@ -55,7 +55,7 @@ func (s S3Client) mountUrl(resource, query string) string {
 	return "https://" + s.s3Url + "/" + s.path + "/" + resource
 }
 
-func (s S3Client) doRequest(method, reqUrl, body string) (string, error) {
+func (s S3Client) doRequest(method, reqUrl, body string, additionalHeaders map[string]string) (string, error) {
 	var req *http.Request
 	var err error
 	if body != "" {
@@ -71,6 +71,9 @@ func (s S3Client) doRequest(method, reqUrl, body string) (string, error) {
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.bearerToken))
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("accept", "application/json")
+	for k, v := range additionalHeaders {
+		req.Header.Add(k, v)
+	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -126,7 +129,7 @@ func (s S3Client) doUpload(reqUrl, source string) error {
 func (s S3Client) GetBucket(name string) (string, error) {
 	bucketUrl := s.mountUrl(name, "max-keys=1")
 
-	resp, err := s.doRequest(http.MethodGet, bucketUrl, "")
+	resp, err := s.doRequest(http.MethodGet, bucketUrl, "", nil)
 
 	return resp, err
 }
@@ -136,7 +139,7 @@ func (s S3Client) CreateBucket(name string) error {
 
 	body := fmt.Sprintf(`{"name":"%s", "locationConstraint":"%s"}`, name, s.region)
 
-	_, err := s.doRequest(http.MethodPut, createBucketUrl, body)
+	_, err := s.doRequest(http.MethodPut, createBucketUrl, body, nil)
 
 	return err
 }
@@ -156,7 +159,7 @@ func (s S3Client) BucketTags(bucket string, tags []any) error {
 	}
 	tagSet = tagSet + `]}]}`
 
-	_, err := s.doRequest(http.MethodPut, tagsUrl, tagSet)
+	_, err := s.doRequest(http.MethodPut, tagsUrl, tagSet, nil)
 
 	return err
 }
@@ -164,7 +167,7 @@ func (s S3Client) BucketTags(bucket string, tags []any) error {
 func (s S3Client) removeBucketTags(bucket string) error {
 	tagsUrl := s.mountUrl(bucket, "tagging")
 
-	_, err := s.doRequest(http.MethodDelete, tagsUrl, "")
+	_, err := s.doRequest(http.MethodDelete, tagsUrl, "", nil)
 	return err
 }
 
@@ -173,7 +176,7 @@ func (s S3Client) UploadObject(bucket, key, source string, overwrite bool) error
 	return s.doUpload(objectUrl, source)
 }
 
-func (s S3Client) BucketAcls(bucket string, setDefault bool, aclsI []interface{}) error {
+func (s S3Client) BucketAcls(bucket string, setDefault bool, cannedAcl string, aclsI []interface{}) error {
 	aclsUrl := s.mountUrl(bucket, "acl")
 
 	bucketStr, err := s.GetBucket(bucket)
@@ -191,8 +194,13 @@ func (s S3Client) BucketAcls(bucket string, setDefault bool, aclsI []interface{}
 
 	log.Printf("BUCKET => %v", bucketObj)
 
+	cannedAclHeader := make(map[string]string)
+	if len(cannedAcl) > 0 && cannedAcl != "" {
+		cannedAclHeader["X-Amz-Acl"] = cannedAcl
+	}
+
 	if setDefault {
-		return s.defaultAcl(bucket, bucketObj)
+		return s.defaultAcl(bucket, bucketObj, cannedAclHeader)
 	}
 
 	var grants []map[string]interface{}
@@ -206,13 +214,13 @@ func (s S3Client) BucketAcls(bucket string, setDefault bool, aclsI []interface{}
 		grantee := map[string]interface{}{}
 		grant := map[string]interface{}{}
 		switch acl["user"] {
-		case "tenant":
+		case "TENANT":
 			grantee["id"] = bucketObj.Tenant + "|"
-		case "authenticated":
+		case "AUTHENTICATED":
 			grantee["uri"] = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
-		case "public":
+		case "PUBLIC":
 			grantee["uri"] = "http://acs.amazonaws.com/groups/global/AllUsers"
-		case "system-logger":
+		case "SYSTEM-LOGGER":
 			grantee["uri"] = "http://acs.amazonaws.com/groups/s3/LogDelivery"
 		}
 		grant["grantee"] = grantee
@@ -238,13 +246,12 @@ func (s S3Client) BucketAcls(bucket string, setDefault bool, aclsI []interface{}
 
 	log.Println(string(payloadStr))
 
-	// s.removeBucketAcls(bucket)
-	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr))
+	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr), cannedAclHeader)
 
 	return err1
 }
 
-func (s S3Client) defaultAcl(bucketName string, bucket *Bucket) error {
+func (s S3Client) defaultAcl(bucketName string, bucket *Bucket, cannedAclHeader map[string]string) error {
 	aclsUrl := s.mountUrl(bucketName, "acl")
 
 	var grants []map[string]interface{}
@@ -262,7 +269,7 @@ func (s S3Client) defaultAcl(bucketName string, bucket *Bucket) error {
 
 	log.Println(string(payloadStr))
 
-	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr))
+	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr), cannedAclHeader)
 
 	return err1
 }
