@@ -45,10 +45,14 @@ Required:
 
 Required:
 
-- `allowed_headers` (String) The allowed_headers element specifies which headers are allowed in a preflight request through the Access-Control-Request-Headers header. Must be a comma separated string
-- `allowed_methods` (String) In the CORS configuration, you can specify the following values for the allowed_methods element GET | PUT | POST | DELETE | HEAD. Must be a comma separated string
-- `allowed_origins` (String) In the allowed_origins element, you specify the origins that you want to allow cross-domain requests from. Must be a comma separated string
-- `expose_headers` (String) Each expose_headers element identifies a header in the response that you want customers to be able to access from their applications (for example, from a JavaScript XMLHttpRequest object). Must be a comma separated string
+- `allowed_methods` (List of String) In the CORS configuration, you can specify the following values for the allowed_methods element GET | PUT | POST | DELETE | HEAD. Must be a comma separated string
+- `allowed_origins` (List of String) In the allowed_origins element, you specify the origins that you want to allow cross-domain requests from. Must be a comma separated string
+
+Optional:
+
+- `allowed_headers` (List of String) The allowed_headers element specifies which headers are allowed in a preflight request through the Access-Control-Request-Headers header. Must be a comma separated string
+- `expose_headers` (List of String) Each expose_headers element identifies a header in the response that you want customers to be able to access from their applications (for example, from a JavaScript XMLHttpRequest object). Must be a comma separated string
+- `max_age_seconds` (Number) Max age in secods. Default 3600
 
 
 <a id="nestedblock--tag"></a>
