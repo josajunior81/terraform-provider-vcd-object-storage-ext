@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/vmware/go-vcloud-director/v2/govcd"
 )
@@ -68,7 +70,7 @@ func (s S3Client) doRequest(method, reqUrl, body string, additionalHeaders map[s
 		return "", err
 	}
 
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", s.bearerToken))
+	req.Header.Add("Authorization", "Bearer "+s.bearerToken)
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("accept", "application/json")
 	for k, v := range additionalHeaders {
@@ -88,7 +90,7 @@ func (s S3Client) doRequest(method, reqUrl, body string, additionalHeaders map[s
 			log.Printf("Error reading HTTP response body: %s", err)
 			return "", err
 		}
-
+		log.Printf("Body: %s", string(body))
 		return string(body), nil
 	}
 
@@ -179,20 +181,11 @@ func (s S3Client) UploadObject(bucket, key, source string, overwrite bool) error
 func (s S3Client) BucketAcls(bucket string, setDefault bool, cannedAcl string, aclsI []interface{}) error {
 	aclsUrl := s.mountUrl(bucket, "acl")
 
-	bucketStr, err := s.GetBucket(bucket)
+	bucketObj, err := s.getBucketObject(bucket)
 	if err != nil {
 		log.Panicf("ERROR getting bucker %v", err)
 		return err
 	}
-
-	var bucketObj *Bucket
-	if err := json.Unmarshal([]byte(bucketStr), &bucketObj); err != nil {
-		log.Println(bucketStr)
-		log.Panicf("ERROR unmarshalling bucket %v", err)
-		return err
-	}
-
-	log.Printf("BUCKET => %v", bucketObj)
 
 	cannedAclHeader := make(map[string]string)
 	if len(cannedAcl) > 0 && cannedAcl != "" {
@@ -237,16 +230,54 @@ func (s S3Client) BucketAcls(bucket string, setDefault bool, cannedAcl string, a
 	payload["owner"] = bucketObj.Owner
 	payload["grants"] = grants
 
-	log.Printf("GRANTS %v", payload)
+	log.Printf("payload %v", payload)
 
 	payloadStr, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 
-	log.Println(string(payloadStr))
+	log.Println("payload STR ==> " + string(payloadStr))
 
 	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr), cannedAclHeader)
+
+	return err1
+}
+
+func toCamelCase(s string) string {
+	re, _ := regexp.Compile(`[-_]\w`)
+	res := re.ReplaceAllStringFunc(s, func(m string) string {
+		return strings.ToUpper(m[1:])
+	})
+	return res
+}
+
+func (s S3Client) BucketCors(bucket string, corsI []interface{}) error {
+	corsUrl := s.mountUrl(bucket, "cors")
+
+	cors := map[string]interface{}{}
+
+	payload := map[string][]interface{}{}
+
+	for _, c := range corsI {
+		for k, v := range c.(map[string]interface{}) {
+			cors[toCamelCase(k)] = v
+		}
+		payload["corsRules"] = append(payload["corsRules"], cors)
+	}
+
+	// cors["id"] = uuid.New()
+
+	log.Printf("payload %v", payload)
+
+	payloadStr, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	log.Println("payload STR ==> " + string(payloadStr))
+
+	_, err1 := s.doRequest(http.MethodPut, corsUrl, string(payloadStr), nil)
 
 	return err1
 }
@@ -272,4 +303,41 @@ func (s S3Client) defaultAcl(bucketName string, bucket *Bucket, cannedAclHeader 
 	_, err1 := s.doRequest(http.MethodPut, aclsUrl, string(payloadStr), cannedAclHeader)
 
 	return err1
+}
+
+func (s S3Client) getBucketObject(name string) (*Bucket, error) {
+	bucketStr, err := s.GetBucket(name)
+	if err != nil {
+		log.Panicf("ERROR getting bucker %v", err)
+		return nil, err
+	}
+
+	var bucketObj *Bucket
+	if err := json.Unmarshal([]byte(bucketStr), &bucketObj); err != nil {
+		log.Println(bucketStr)
+		log.Panicf("ERROR unmarshalling bucket %v", err)
+		return nil, err
+	}
+
+	return bucketObj, nil
+}
+
+func (s S3Client) DeleteBucket(name string) error {
+	deleteUrl := s.mountUrl(name, "")
+
+	payload := `{
+		"quiet": true,
+		"removeAll": true,
+		"deleteVersion": true,
+		"tryAsync": true
+	}`
+
+	_, err := s.doRequest(http.MethodPost, s.mountUrl(name, "delete"), payload, nil)
+	if err != nil {
+		log.Panicf("ERROR deleting all Objetcts of bucket %s: %v", name, err)
+		return err
+	}
+
+	_, err2 := s.doRequest(http.MethodDelete, deleteUrl, "", nil)
+	return err2
 }

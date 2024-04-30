@@ -3,12 +3,12 @@
 page_title: "vcd-object-storage-ext_bucket Resource - terraform-provider-vcd-object-storage-ext"
 subcategory: ""
 description: |-
-  
+  A bucket is a container for storing objects in a compartment within an Object Storage namespace.
 ---
 
 # vcd-object-storage-ext_bucket (Resource)
 
-
+A bucket is a container for storing objects in a compartment within an Object Storage namespace.
 
 
 
@@ -21,8 +21,9 @@ description: |-
 
 ### Optional
 
-- `acl` (Block List) Access control lists (ACLs) enable you to manage access to buckets and objects (see [below for nested schema](#nestedblock--acl))
+- `acl` (Block List) Access control lists (ACLs) enable you to manage access to buckets and objects. (see [below for nested schema](#nestedblock--acl))
 - `canned_acl` (String) The ACL of the bucket using the specified canned ACL. Valid Values: private | public-read | public-read-write | authenticated-read.
+- `cors` (Block List) Cross-origin resource sharing (CORS) defines a way for client web applications that are loaded in one domain to interact with resources in a different domain. (see [below for nested schema](#nestedblock--cors))
 - `tag` (Block List) The bucket tags. (see [below for nested schema](#nestedblock--tag))
 
 ### Read-Only
@@ -37,6 +38,17 @@ Required:
 
 - `permission` (String) ACL permission. Valid Values: FULL_CONTROL | READ | WRITE | READ_ACP | WRITE_ACP
 - `user` (String) ACL users. Valid Values: TENANT | AUTHENTICATED | PUBLIC | SYSTEM-LOGGER
+
+
+<a id="nestedblock--cors"></a>
+### Nested Schema for `cors`
+
+Required:
+
+- `allowed_headers` (String) The allowed_headers element specifies which headers are allowed in a preflight request through the Access-Control-Request-Headers header. Must be a comma separated string
+- `allowed_methods` (String) In the CORS configuration, you can specify the following values for the allowed_methods element GET | PUT | POST | DELETE | HEAD. Must be a comma separated string
+- `allowed_origins` (String) In the allowed_origins element, you specify the origins that you want to allow cross-domain requests from. Must be a comma separated string
+- `expose_headers` (String) Each expose_headers element identifies a header in the response that you want customers to be able to access from their applications (for example, from a JavaScript XMLHttpRequest object). Must be a comma separated string
 
 
 <a id="nestedblock--tag"></a>

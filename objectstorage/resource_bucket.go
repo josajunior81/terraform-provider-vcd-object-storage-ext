@@ -33,11 +33,28 @@ func resourceBucket() *schema.Resource {
 			},
 
 			"canned_acl": {
-				Type:             schema.TypeString,
-				Optional:         true,
-				ForceNew:         false,
-				ValidateDiagFunc: validateCannedAcl,
-				Description:      "The ACL of the bucket using the specified canned ACL. Valid Values: private | public-read | public-read-write | authenticated-read.",
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: false,
+				ValidateDiagFunc: func(v interface{}, p cty.Path) diag.Diagnostics {
+					value := v.(string)
+					var diags diag.Diagnostics
+
+					switch value {
+					case "private", "public-read", "public-read-write", "authenticated-read", "group-read-write", "group-read", "log-delivery-write":
+						return diags
+					default:
+						diag := diag.Diagnostic{
+							Severity:      diag.Error,
+							Summary:       "Wrong value. Valid Values: private | public-read | public-read-write | authenticated-read | group-read-write | group-read | log-delivery-write",
+							Detail:        fmt.Sprintf("%q is not x-amz-acl valid value", value),
+							AttributePath: p,
+						}
+
+						return append(diags, diag)
+					}
+				},
+				Description: "The ACL of the bucket using the specified canned ACL. Valid Values: private | public-read | public-read-write | authenticated-read.",
 			},
 
 			"tag": {
@@ -63,80 +80,107 @@ func resourceBucket() *schema.Resource {
 				Type:        schema.TypeList,
 				Optional:    true,
 				ForceNew:    false,
-				Description: "Access control lists (ACLs) enable you to manage access to buckets and objects",
+				Description: "Access control lists (ACLs) enable you to manage access to buckets and objects.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"user": {
-							Type:             schema.TypeString,
-							Required:         true,
-							ValidateDiagFunc: validateAclUser,
-							Description:      "ACL users. Valid Values: TENANT | AUTHENTICATED | PUBLIC | SYSTEM-LOGGER",
+							Type:     schema.TypeString,
+							Required: true,
+							ValidateDiagFunc: func(v interface{}, p cty.Path) diag.Diagnostics {
+								value := v.(string)
+								var diags diag.Diagnostics
+
+								if value != "TENANT" && value != "AUTHENTICATED" && value != "PUBLIC" && value != "SYSTEM-LOGGER" {
+									diag := diag.Diagnostic{
+										Severity:      diag.Error,
+										Summary:       "Wrong value. Valid Values: TENANT | AUTHENTICATED | PUBLIC | SYSTEM-LOGGER",
+										Detail:        fmt.Sprintf("%q is not a valid ACL User", value),
+										AttributePath: p,
+									}
+
+									diags = append(diags, diag)
+								}
+
+								return diags
+							},
+							Description: "ACL users. Valid Values: TENANT | AUTHENTICATED | PUBLIC | SYSTEM-LOGGER",
 						},
 						"permission": {
-							Type:             schema.TypeString,
-							Required:         true,
-							ValidateDiagFunc: validateAclPermission,
-							Description:      "ACL permission. Valid Values: FULL_CONTROL | READ | WRITE | READ_ACP | WRITE_ACP",
+							Type:     schema.TypeString,
+							Required: true,
+							ValidateDiagFunc: func(i interface{}, p cty.Path) diag.Diagnostics {
+								value := i.(string)
+								var diags diag.Diagnostics
+
+								if value != "FULL_CONTROL" && value != "READ" && value != "WRITE" && value != "READ_ACP" && value != "WRITE_ACP" {
+									diag := diag.Diagnostic{
+										Severity:      diag.Error,
+										Summary:       "Wrong value. Valid Values: FULL_CONTROL | READ | WRITE | READ_ACP | WRITE_ACP",
+										Detail:        fmt.Sprintf("%q is not a valid ACL Permission", value),
+										AttributePath: p,
+									}
+
+									diags = append(diags, diag)
+								}
+
+								return diags
+							},
+							Description: "ACL permission. Valid Values: FULL_CONTROL | READ | WRITE | READ_ACP | WRITE_ACP",
+						},
+					},
+				},
+			},
+
+			"cors": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				ForceNew:    false,
+				Description: "Cross-origin resource sharing (CORS) defines a way for client web applications that are loaded in one domain to interact with resources in a different domain.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"allowed_headers": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "The allowed_headers element specifies which headers are allowed in a preflight request through the Access-Control-Request-Headers header. Must be a comma separated string",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"expose_headers": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: "Each expose_headers element identifies a header in the response that you want customers to be able to access from their applications (for example, from a JavaScript XMLHttpRequest object). Must be a comma separated string",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"allowed_methods": {
+							Type:        schema.TypeList,
+							Required:    true,
+							Description: "In the CORS configuration, you can specify the following values for the allowed_methods element GET | PUT | POST | DELETE | HEAD. Must be a comma separated string",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"allowed_origins": {
+							Type:        schema.TypeList,
+							Required:    true,
+							Description: "In the allowed_origins element, you specify the origins that you want to allow cross-domain requests from. Must be a comma separated string",
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"max_age_seconds": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Default:     3600,
+							Description: "Max age in secods. Default 3600",
 						},
 					},
 				},
 			},
 		},
 	}
-}
-
-func validateAclPermission(v interface{}, path cty.Path) diag.Diagnostics {
-	value := v.(string)
-	var diags diag.Diagnostics
-
-	if value != "FULL_CONTROL" && value != "READ" && value != "WRITE" && value != "READ_ACP" && value != "WRITE_ACP" {
-		diag := diag.Diagnostic{
-			Severity:      diag.Error,
-			Summary:       "Wrong value. Valid Values: FULL_CONTROL | READ | WRITE | READ_ACP | WRITE_ACP",
-			Detail:        fmt.Sprintf("%q is not a valid ACL Permission", value),
-			AttributePath: path,
-		}
-
-		diags = append(diags, diag)
-	}
-
-	return diags
-}
-
-func validateAclUser(v interface{}, path cty.Path) diag.Diagnostics {
-	value := v.(string)
-	var diags diag.Diagnostics
-
-	if value != "TENANT" && value != "AUTHENTICATED" && value != "PUBLIC" && value != "SYSTEM-LOGGER" {
-		diag := diag.Diagnostic{
-			Severity:      diag.Error,
-			Summary:       "Wrong value. Valid Values: TENANT | AUTHENTICATED | PUBLIC | SYSTEM-LOGGER",
-			Detail:        fmt.Sprintf("%q is not a valid ACL User", value),
-			AttributePath: path,
-		}
-
-		diags = append(diags, diag)
-	}
-
-	return diags
-}
-
-func validateCannedAcl(v interface{}, path cty.Path) diag.Diagnostics {
-	value := v.(string)
-	var diags diag.Diagnostics
-
-	if value != "private" && value != "public-read" && value != "public-read-write" && value != "authenticated-read" {
-		diag := diag.Diagnostic{
-			Severity:      diag.Error,
-			Summary:       "Wrong value. Valid Values: private | public-read | public-read-write | authenticated-read",
-			Detail:        fmt.Sprintf("%q is not x-amz-acl valid value", value),
-			AttributePath: path,
-		}
-
-		diags = append(diags, diag)
-	}
-
-	return diags
 }
 
 // Creates Bucket on the Object Storage
@@ -181,6 +225,18 @@ func resourceBucketUpdate(c context.Context, d *schema.ResourceData, meta interf
 	cannedAcl := d.Get("canned_acl").(string)
 	tags := d.Get("tag").([]any)
 	acls := d.Get("acl").([]interface{})
+	cors := d.Get("cors").([]interface{})
+
+	log.Printf("cors %v", cors)
+
+	if cannedAcl != "" && len(acls) > 0 {
+		diag := diag.Diagnostic{
+			Severity: diag.Error,
+			Summary:  "You have to choose between Canned ACL or ACL rules",
+			Detail:   "Choose between Canned ACL or ACL rules",
+		}
+		return append(diags, diag)
+	}
 
 	if len(acls) > 0 {
 		err := s3client.BucketAcls(bucketName, false, cannedAcl, acls)
@@ -203,6 +259,7 @@ func resourceBucketUpdate(c context.Context, d *schema.ResourceData, meta interf
 			return append(diags, diag)
 		}
 	}
+
 	if len(tags) > 0 {
 		err := s3client.BucketTags(bucketName, tags)
 		if err != nil {
@@ -214,6 +271,18 @@ func resourceBucketUpdate(c context.Context, d *schema.ResourceData, meta interf
 			return append(diags, diag)
 		}
 	}
+
+	if len(cors) > 0 {
+		err := s3client.BucketCors(bucketName, cors)
+		if err != nil {
+			diag := diag.Diagnostic{
+				Severity: diag.Error,
+				Summary:  "Error editing bucket CORs",
+				Detail:   fmt.Sprintf("Error editing bucket CORs: %v", err),
+			}
+			return append(diags, diag)
+		}
+	}
 	return diags
 }
 
@@ -221,5 +290,18 @@ func resourceBucketUpdate(c context.Context, d *schema.ResourceData, meta interf
 func resourceBucketDelete(c context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	resourceID := d.Id()
 	log.Println(">>> resourceID:", resourceID)
-	return diag.Diagnostics{}
+
+	var diags diag.Diagnostics
+
+	s3client := meta.(pkg.S3Client)
+	bucketName := d.Get("name").(string)
+	if err := s3client.DeleteBucket(bucketName); err != nil {
+		diag := diag.Diagnostic{
+			Severity: diag.Error,
+			Summary:  "Error editing bucket TAGs",
+			Detail:   fmt.Sprintf("Error editing bucket TAGs: %v", err),
+		}
+		return append(diags, diag)
+	}
+	return diags
 }
